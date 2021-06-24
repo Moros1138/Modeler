@@ -1,2 +1,4 @@
-obj/*.o
+obj/*.linux.o
+obj/*.windows.o
 bin/Modeler
+bin/Modeler.exe
