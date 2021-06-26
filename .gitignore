@@ -1,4 +1,15 @@
+# testing output files
+*.model
+
+# object files
 obj/*.linux.o
+obj/*.wasm.o
 obj/*.windows.o
+
+# binaries
 bin/Modeler
+bin/Modeler.data
 bin/Modeler.exe
+bin/Modeler.html
+bin/Modeler.js
+bin/Modeler.wasm
