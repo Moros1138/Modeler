@@ -10,7 +10,7 @@
 
 typedef std::vector<olc::vf2d> Model;
 
-#define HI_DEF
+// #define HI_DEF
 
 #if defined(HI_DEF)
 #define POINT_MODIFIER  40.0f
@@ -19,7 +19,7 @@ typedef std::vector<olc::vf2d> Model;
 #define SCALE_MAX       200.0f
 #define STRING_SCALE    4
 #else
-#define POINT_MODIFIER  10.0f
+#define POINT_MODIFIER  20.0f
 #define SCALE_INIT      10.0f
 #define SCALE_MIN       4.0f
 #define SCALE_MAX       50.0f
