@@ -23,6 +23,7 @@ typedef std::vector<olc::vf2d> Model;
 #define SCALE_MAX       50.0f
 #define STRING_SCALE    1
 #endif
+
 class Modeler : public olc::PixelGameEngine
 {
 public:
