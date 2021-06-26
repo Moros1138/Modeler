@@ -15,11 +15,13 @@ typedef std::vector<olc::vf2d> Model;
 #define SCALE_INIT      40.0f
 #define SCALE_MIN       16.0f
 #define SCALE_MAX       200.0f
+#define STRING_SCALE    4
 #else
 #define POINT_MODIFIER  10.0f
 #define SCALE_INIT      10.0f
 #define SCALE_MIN       4.0f
 #define SCALE_MAX       50.0f
+#define STRING_SCALE    1
 #endif
 class Modeler : public olc::PixelGameEngine
 {
@@ -239,12 +241,7 @@ public:
             DrawStringDecal(transformed[i], std::to_string(i), olc::WHITE, olc::vf2d(radius, radius) * 0.3f);
         }
 
-        #if defined(HI_DEF)
-        DrawString(20, 20, buf.str(), olc::WHITE, 4);
-        #else
-        DrawString(5, 5, buf.str(), olc::WHITE);
-        #endif
-        
+        DrawString(olc::vi2d{5, 5} * STRING_SCALE, buf.str(), olc::WHITE, STRING_SCALE);
         DrawInstructions();
 
         return !GetKey(olc::ESCAPE).bPressed;
@@ -260,26 +257,26 @@ private:
 
     void DrawInstructions()
     {
-        int insX = 5;
-        int insY = ScreenHeight() - 14;
+        int insX = 5 * STRING_SCALE;
+        int insY = ScreenHeight() - (14 * STRING_SCALE);
 
         // Instructions
-        DrawString(insX, insY, "F)ill P)oints S)troke W)ire", olc::WHITE);
+        DrawString(insX, insY, "F)ill P)oints S)troke W)ire", olc::WHITE, STRING_SCALE);
         
         if(bFill)
-            DrawString(insX, insY, "F", olc::RED);
+            DrawString(insX, insY, "F", olc::RED, STRING_SCALE);
         
-        insX += GetTextSize("F)ill ").x;
+        insX += GetTextSize("F)ill ").x * STRING_SCALE;
         if(bPoints)
-            DrawString(insX, insY, "P", olc::RED);
+            DrawString(insX, insY, "P", olc::RED, STRING_SCALE);
 
-        insX += GetTextSize("P)oints ").x;
+        insX += GetTextSize("P)oints ").x * STRING_SCALE;
         if(bStroke)
-            DrawString(insX, insY, "S", olc::RED);
+            DrawString(insX, insY, "S", olc::RED, STRING_SCALE);
         
-        insX += GetTextSize("S)troke ").x;
+        insX += GetTextSize("S)troke ").x * STRING_SCALE;
         if(bWire)
-            DrawString(insX, insY, "W", olc::RED);
+            DrawString(insX, insY, "W", olc::RED, STRING_SCALE);
             
     }
 
