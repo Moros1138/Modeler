@@ -8,6 +8,19 @@
 
 typedef std::vector<olc::vf2d> Model;
 
+#define HI_DEF
+
+#if defined(HI_DEF)
+#define POINT_MODIFIER  40.0f
+#define SCALE_INIT      40.0f
+#define SCALE_MIN       16.0f
+#define SCALE_MAX       200.0f
+#else
+#define POINT_MODIFIER  10.0f
+#define SCALE_INIT      10.0f
+#define SCALE_MIN       4.0f
+#define SCALE_MAX       50.0f
+#endif
 class Modeler : public olc::PixelGameEngine
 {
 public:
@@ -26,20 +39,27 @@ public:
             std::cout << "Portable File Dialogs are not available on this platform.\n";
             return false;
         }
+        
+        // canvas size
+        vSize = { 120, 120 };
+        vOrigin = vSize / 2.0f;
 
         // scaling
-        fScale = 22.0f;
-        fMinScale = 4.0f;
-        fMaxScale = 50.0f;
+        fScale = SCALE_INIT;
+        fMinScale = SCALE_MIN;
+        fMaxScale = SCALE_MAX;
 
-        // precalculate the screen
-        vCenter = {ScreenWidth() / 2, ScreenHeight() / 2};
-        vOffset = {0,0};
+        vOffset = {
+            -((vSize.x / 2 * fScale) - ScreenWidth() / 2),
+            -((vSize.y / 2 * fScale) - ScreenHeight() / 2),
+        };
 
         // colors
-        cBackground =    olc::VERY_DARK_BLUE;
-        cGrid =          olc::DARK_BLUE;
-        cOrigin =        olc::BLUE;
+        cBackground = olc::VERY_DARK_BLUE;
+        cCursor =     olc::DARK_CYAN;
+        cGrid =       olc::DARK_BLUE;
+        cGridWhole =  olc::VERY_DARK_RED;
+        cOrigin =     olc::BLUE;
 
         // drawing states
         bFill =     true;
@@ -49,119 +69,138 @@ public:
 
         // point selection
         selected = -1;
-
+        
         return true;
     }
     
-    olc::vi2d vMouse1;
-    olc::vi2d vMouse2;
-    olc::vf2d vOffset;
-    
     bool OnUserUpdate(float fElapsedTime) override
     {
-        int nGridLines = 40;
-        std::stringstream sBuf;
-
-        olc::vf2d vMouse = {
-            (float)round(((float)GetMouseX() + (float)vCenter.x - (float)ScreenWidth()) / fScale),
-            (float)round(((float)GetMouseY() + (float)vCenter.y - (float)ScreenHeight()) / fScale)
-        };
         
-        sBuf << (vMouse * 0.1f).x << " " << (vMouse * 0.1f).y;
+        std::stringstream buf;
+        vMouse = GetMousePos();
+        hover = -1;
 
-        Model transformed = gfx_blackbox::Polygon::Transform(mModel, vCenter, fScale, 0.0f);
+        // BEGIN: pan
+        if(GetMouse(2).bPressed)
+            vPanStart = vMouse;
         
-        if(GetKey(olc::K1).bPressed)
+        if(GetMouse(2).bHeld)
         {
-            auto destination = pfd::save_file("Select a file", ".model", {"Model Files", "*.model"}).result();
-            if (!destination.empty())
+            vOffset += (vMouse - vPanStart);
+            vPanStart = vMouse;
+        }
+        // END: pan
+        
+        // BEGIN: zoom
+        vZoomStart = ScreenToWorld(vMouse);
+
+        fScale += (float)GetMouseWheel() * 3.0f * fElapsedTime;
+        
+        // clamp zooming scale
+        if(fScale < fMinScale) fScale = fMinScale;
+        if(fScale > fMaxScale) fScale = fMaxScale;
+        
+        vOffset -= (vZoomStart - ScreenToWorld(vMouse)) * fScale;
+        // END: zoom
+
+        // find cursor location
+        olc::vf2d vCursor = olc::vf2d(
+            round(vZoomStart.x - vOrigin.x),
+            round(vZoomStart.y - vOrigin.y)
+        );
+        
+        // prepare cursor for output
+        buf << vCursor.x * 0.1f << " " << vCursor.y * 0.1f;
+        
+        // find if we're hovering over a point
+        hover = -1;
+        for(int i = 0; i < mModel.size(); i++)
+        {
+            if((vZoomStart - mModel[i]).mag() < 0.5f)
             {
-                SaveFile(destination);
+                hover = i;
+                break;
             }
         }
-
-        // Left Mouse Press
+        
+        // add or select point (Left Mouse)
         if(GetMouse(0).bPressed)
         {
             selected = -1;
-            for(int i = 0; i < mModel.size(); i++)
-            {
-                if((vMouse-mModel[i]).mag() < 0.1f)
-                {
-                    selected = i;
-                    break;
-                }
-            }
             
+            // are we hovering over one?
+            if(hover != -1)
+                selected = hover;
+
+            // if we're here and not selected, add the point
             if(selected == -1)
-                mModel.push_back(vMouse);
-        }
-
-        // Left Mouse Release
-        if(GetMouse(0).bReleased)
-        {
-            if(selected != -1)
-            {
-                mModel[selected] = vMouse;
-                selected = -1;
-            }
-        }
-
-        if(GetMouse(2).bPressed)
-            vMouse1 = GetMousePos();
-
-        if(GetMouse(2).bHeld)
-        {
-            vMouse2 = GetMousePos();
-            vCenter += (vMouse2 - vMouse1);
-            vOffset += (vMouse2 - vMouse1) / fScale;
-            vMouse1 = vMouse2;
-        }
-
-        // Zoom In
-        if(GetMouseWheel() > 0)
-        {
-            fScale += 1.0f;
-            if(fScale > fMaxScale) fScale = fMaxScale;
+                mModel.push_back(vCursor + vOrigin);
         }
         
-        // Zoom Out
-        if(GetMouseWheel() < 0)
+        // move the selected point around while held
+        if(GetMouse(0).bHeld && selected != -1)
+            mModel[selected] = vCursor + vOrigin;
+
+        // deselect point when released
+        if(GetMouse(0).bReleased && selected != -1)
+            selected = -1;
+
+        // remove point we're hoving over
+        if(GetKey(olc::R).bPressed && hover != -1)
         {
-            fScale -= 1.0f;
-            if(fScale < fMinScale) fScale = fMinScale;
+            mModel.erase(mModel.begin()+hover);
+            selected = -1;
+            hover = -1;
         }
         
+        // save model
+        if(GetKey(olc::K1).bPressed)
+        {
+            auto dest = pfd::save_file("Select a file", ".model", {"Model Files", "*.model"}).result();
+            if(!dest.empty())
+                SaveFile(dest);
+        }
+
+        // controls
         if(GetKey(olc::F).bPressed) bFill = !bFill;
         if(GetKey(olc::P).bPressed) bPoints = !bPoints;
         if(GetKey(olc::S).bPressed) bStroke = !bStroke;
         if(GetKey(olc::W).bPressed) bWire = !bWire;
+        
+        // clear to black
+        Clear(olc::BLACK);
+        
+        // fill the canvas
+        FillRect(vOffset, vSize * fScale, cBackground);
+        
+        // make it draw less grid when zoomed out
+        int nGridIncrement = (fScale < 40.0f) ? 2 : 1;
 
-        if(GetKey(olc::R).bPressed && selected != -1)
+        // draw columns
+        for(int i = 0; i < vSize.x; i += nGridIncrement)
         {
-            mModel.erase(mModel.begin()+selected);
-            selected = -1;
-        }
-
-        // DRAWING ROUTINES
-        Clear(cBackground);
-
-        // Draw the grid lines      
-        for(int i = 0; i < nGridLines; i++)
-        {
-            if(fScale < 10.0f && i % 2 == 1)
-                continue;
-
-            DrawLine(vCenter.x - ((nGridLines-1) * fScale), vCenter.y - (i * fScale), vCenter.x + ((nGridLines-1) * fScale), vCenter.y - (i * fScale), cGrid);
-            DrawLine(vCenter.x - ((nGridLines-1) * fScale), vCenter.y + (i * fScale), vCenter.x + ((nGridLines-1) * fScale), vCenter.y + (i * fScale), cGrid);
-            DrawLine(vCenter.x - (i * fScale), vCenter.y - ((nGridLines-1) * fScale), vCenter.x - (i * fScale), vCenter.y + ((nGridLines-1) * fScale), cGrid);
-            DrawLine(vCenter.x + (i * fScale), vCenter.y - ((nGridLines-1) * fScale), vCenter.x + (i * fScale), vCenter.y + ((nGridLines-1) * fScale), cGrid);
+            if(i % 10 == 0) // draw whole numbered grids a different color than the rest
+                DrawLine(std::floor((i * fScale) + vOffset.x), vOffset.y, std::floor((i * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cGridWhole);
+            else
+                DrawLine(std::floor((i * fScale) + vOffset.x), vOffset.y, std::floor((i * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cGrid);
         }
         
-        // Draw Grid Origin
-        DrawLine(vCenter.x, 0, vCenter.x, ScreenHeight(), cOrigin);
-        DrawLine(0, vCenter.y, ScreenWidth(), vCenter.y, cOrigin);
+        // draw rows
+        for(int i = 0; i < vSize.y; i += nGridIncrement)
+        {
+            if(i % 10 == 0) // draw whole numbered grids a different color than the rest
+                DrawLine(vOffset.x, std::floor((i * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor((i * fScale) + vOffset.y), cGridWhole);
+            else
+                DrawLine(vOffset.x, std::floor((i * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor((i * fScale) + vOffset.y), cGrid);
+        }
 
+        // draw origin
+        DrawLine(std::floor((vSize.x / 2 * fScale) + vOffset.x), vOffset.y, std::floor((vSize.x / 2 * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cOrigin);
+        DrawLine(vOffset.x, std::floor((vSize.y / 2 * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor(((vSize.y / 2) * fScale) + vOffset.y), cOrigin);
+
+        // get points transformed to screen space
+        auto transformed = gfx_blackbox::Polygon::Transform(mModel, vOffset, fScale, 0.0f);
+        
         if(bFill)
             gfx_blackbox::Polygon::Fill(this, transformed, olc::DARK_GREY);
         
@@ -170,28 +209,57 @@ public:
         
         if(bStroke)
             gfx_blackbox::Polygon::Stroke(this, transformed, olc::WHITE);
+
         
-        if(bPoints)
+        // do some math to derive the radius of our points
+        float radius = (fScale / fMaxScale) * POINT_MODIFIER;
+        
+        // draw our mouse cursor
+        FillCircle(((vCursor + vOrigin) * fScale) + vOffset, radius, cCursor);
+        
+        // draw points
+        for(int i = 0; i < transformed.size(); i++)
         {
-            int counter = 0;
-            for(auto& p : transformed)
-            {
-                FillCircle(p, 2, olc::RED);
-                DrawStringDecal(p+olc::vf2d(1,1), std::to_string(counter), olc::BLACK);
-                DrawStringDecal(p, std::to_string(counter), olc::WHITE);
-                counter++;
-            }
+            if(!bPoints)
+                break;
+
+            // default red
+            olc::Pixel pCol = olc::RED;
+            
+            // yellow on hover
+            if(hover == i)
+                pCol = olc::YELLOW;
+            
+            // green on selected
+            if(selected == i)
+                pCol = olc::GREEN;
+
+            FillCircle(transformed[i], radius, pCol);
+            DrawStringDecal(transformed[i]+olc::vf2d{1,1}, std::to_string(i), olc::BLACK, olc::vf2d(radius, radius) * 0.3f);
+            DrawStringDecal(transformed[i], std::to_string(i), olc::WHITE, olc::vf2d(radius, radius) * 0.3f);
         }
 
-        // Draw the current mouse position if we are not selecting one
-        if(selected == -1)
-            FillCircle((vCenter + olc::vf2d{vOffset.x, vOffset.y} * fScale) + (vMouse * fScale), 2, olc::YELLOW);
-        else
-            FillCircle(vCenter + (vMouse * fScale), 2, olc::GREEN);
-
-        // Display current coordinates
-        DrawString(5, 5, sBuf.str(), olc::WHITE);
+        #if defined(HI_DEF)
+        DrawString(20, 20, buf.str(), olc::WHITE, 4);
+        #else
+        DrawString(5, 5, buf.str(), olc::WHITE);
+        #endif
         
+        DrawInstructions();
+
+        return !GetKey(olc::ESCAPE).bPressed;
+    }
+
+
+private:
+
+	olc::vf2d ScreenToWorld(const olc::vf2d& p)
+	{
+		return olc::vf2d(p - vOffset) / fScale;
+	}
+
+    void DrawInstructions()
+    {
         int insX = 5;
         int insY = ScreenHeight() - 14;
 
@@ -213,36 +281,49 @@ public:
         if(bWire)
             DrawString(insX, insY, "W", olc::RED);
             
-        return !GetKey(olc::ESCAPE).bPressed;
     }
 
-private:
-    
     void SaveFile(const std::string& file)
     {
+        // open the file
         outfile.open(file);
         
+        // cycle through the points
         for(auto& point : mModel)
         {
-            olc::vf2d savedPoint = point * 0.1f;
+            // convert each point to the intended world space
+            olc::vf2d savedPoint = (point - vOrigin) * 0.1f;
+            
+            // save the converted point to the file
             outfile << savedPoint.x << " " << savedPoint.y << std::endl;
         }
+
+        // close the file
         outfile.close();
     }
 
 private:
-    
-    // precalculated screen center
-    olc::vi2d vCenter;
     
     // scaling
     float fScale;
     float fMinScale;
     float fMaxScale;
 
+    // canvas size
+    olc::vf2d vSize;
+    olc::vf2d vOrigin;
+
+    // pan and zoom 
+    olc::vf2d vOffset;
+    olc::vi2d vMouse;
+    olc::vi2d vPanStart;
+    olc::vf2d vZoomStart;
+
     // colors
     olc::Pixel cBackground;
+    olc::Pixel cCursor;
     olc::Pixel cGrid;
+    olc::Pixel cGridWhole;
     olc::Pixel cOrigin;
 
     // drawing states
@@ -256,16 +337,20 @@ private:
 
     // track selected point
     int selected;
+    int hover;
 
     // file stream
     std::ofstream outfile;
-
 };
 
 int main()
 {
     Modeler modeler;
+#if defined(HI_DEF)
+    if(modeler.Construct(1280, 720, 1, 1))
+#else
     if(modeler.Construct(320, 180, 4, 4))
+#endif
         modeler.Start();
 
     return 0;
