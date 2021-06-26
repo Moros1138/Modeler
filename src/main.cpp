@@ -4,7 +4,9 @@
 #define GFX_BLACKBOX_IMPLEMENTATION
 #include "gfxBlackbox.h"
 
+#if !defined(__EMSCRIPTEN__)
 #include "portable-file-dialogs.h"
+#endif
 
 typedef std::vector<olc::vf2d> Model;
 
@@ -36,13 +38,14 @@ public:
     
     bool OnUserCreate() override
     {
+#if !defined(__EMSCRIPTEN__)
         // Check that a backend is available
         if (!pfd::settings::available())
         {
             std::cout << "Portable File Dialogs are not available on this platform.\n";
             return false;
         }
-        
+#endif        
         // canvas size
         vSize = { 120, 120 };
         vOrigin = vSize / 2.0f;
@@ -159,9 +162,13 @@ public:
         // save model
         if(GetKey(olc::K1).bPressed)
         {
+#if !defined(__EMSCRIPTEN__)
             auto dest = pfd::save_file("Select a file", ".model", {"Model Files", "*.model"}).result();
             if(!dest.empty())
                 SaveFile(dest);
+#else
+            SaveFile("");
+#endif
         }
 
         // controls
@@ -283,6 +290,18 @@ private:
 
     void SaveFile(const std::string& file)
     {
+#if defined(__EMSCRIPTEN__)
+        // cycle through the points
+        for(auto& point : mModel)
+        {
+            // convert each point to the intended world space
+            olc::vf2d savedPoint = (point - vOrigin) * 0.1f;
+            
+            // save the converted point to the file
+            std::cout << savedPoint.x << " " << savedPoint.y << std::endl;
+        }
+
+#else
         // open the file
         outfile.open(file);
         
@@ -294,10 +313,12 @@ private:
             
             // save the converted point to the file
             outfile << savedPoint.x << " " << savedPoint.y << std::endl;
+            
         }
 
         // close the file
         outfile.close();
+#endif
     }
 
 private:
