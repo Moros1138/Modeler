@@ -110,7 +110,7 @@ public:
         // END: zoom
 
         // find cursor location
-        olc::vf2d vCursor = olc::vf2d(
+        vCursor = olc::vf2d(
             round(vZoomStart.x - vOrigin.x),
             round(vZoomStart.y - vOrigin.y)
         );
@@ -180,33 +180,7 @@ public:
         // clear to black
         Clear(olc::BLACK);
         
-        // fill the canvas
-        FillRect(vOffset, vSize * fScale, cBackground);
-        
-        // make it draw less grid when zoomed out
-        int nGridIncrement = (fScale < 40.0f) ? 2 : 1;
-
-        // draw columns
-        for(int i = 0; i < vSize.x; i += nGridIncrement)
-        {
-            if(i % 10 == 0) // draw whole numbered grids a different color than the rest
-                DrawLine(std::floor((i * fScale) + vOffset.x), vOffset.y, std::floor((i * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cGridWhole);
-            else
-                DrawLine(std::floor((i * fScale) + vOffset.x), vOffset.y, std::floor((i * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cGrid);
-        }
-        
-        // draw rows
-        for(int i = 0; i < vSize.y; i += nGridIncrement)
-        {
-            if(i % 10 == 0) // draw whole numbered grids a different color than the rest
-                DrawLine(vOffset.x, std::floor((i * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor((i * fScale) + vOffset.y), cGridWhole);
-            else
-                DrawLine(vOffset.x, std::floor((i * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor((i * fScale) + vOffset.y), cGrid);
-        }
-
-        // draw origin
-        DrawLine(std::floor((vSize.x / 2 * fScale) + vOffset.x), vOffset.y, std::floor((vSize.x / 2 * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cOrigin);
-        DrawLine(vOffset.x, std::floor((vSize.y / 2 * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor(((vSize.y / 2) * fScale) + vOffset.y), cOrigin);
+        DrawCanvas();
 
         // get points transformed to screen space
         auto transformed = gfx_blackbox::Polygon::Transform(mModel, vOffset, fScale, 0.0f);
@@ -220,7 +194,53 @@ public:
         if(bStroke)
             gfx_blackbox::Polygon::Stroke(this, transformed, olc::WHITE);
 
+        DrawPoints(transformed);
+
+        DrawString(olc::vi2d{5, 5} * STRING_SCALE, buf.str(), olc::WHITE, STRING_SCALE);
+        DrawInstructions();
+
+        return !GetKey(olc::ESCAPE).bPressed;
+    }
+
+
+private:
+
+	olc::vf2d ScreenToWorld(const olc::vf2d& p)
+	{
+		return olc::vf2d(p - vOffset) / fScale;
+	}
+
+    void DrawCanvas()
+    {
+        // fill the canvas
+        FillRect(vOffset, vSize * fScale, cBackground);
         
+        // make it draw less grid when zoomed out
+        int nGridIncrement = (fScale < 40.0f) ? 2 : 1;
+
+        // draw columns
+        for(int i = 0; i < vSize.x; i += nGridIncrement)
+            DrawLine(std::floor((i * fScale) + vOffset.x), vOffset.y, std::floor((i * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cGrid);
+        
+        // draw rows
+        for(int i = 0; i < vSize.y; i += nGridIncrement)
+            DrawLine(vOffset.x, std::floor((i * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor((i * fScale) + vOffset.y), cGrid);
+        
+        // draw whole numbered columns a different color than the rest
+        for(int i = 0; i < vSize.x; i += 10)
+            DrawLine(std::floor((i * fScale) + vOffset.x), vOffset.y, std::floor((i * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cGridWhole);
+
+        // draw whole numbered rows a different color than the rest
+        for(int i = 0; i < vSize.y; i += 10)
+            DrawLine(vOffset.x, std::floor((i * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor((i * fScale) + vOffset.y), cGridWhole);
+
+        // draw origin
+        DrawLine(std::floor((vSize.x / 2 * fScale) + vOffset.x), vOffset.y, std::floor((vSize.x / 2 * fScale) + vOffset.x), vSize.y * fScale + vOffset.y, cOrigin);
+        DrawLine(vOffset.x, std::floor((vSize.y / 2 * fScale) + vOffset.y), vSize.x * fScale + vOffset.x, std::floor(((vSize.y / 2) * fScale) + vOffset.y), cOrigin);
+    }
+
+    void DrawPoints(const Model& model)
+    {
         // do some math to derive the radius of our points
         float radius = (fScale / fMaxScale) * POINT_MODIFIER;
         
@@ -228,7 +248,7 @@ public:
         FillCircle(((vCursor + vOrigin) * fScale) + vOffset, radius, cCursor);
         
         // draw points
-        for(int i = 0; i < transformed.size(); i++)
+        for(int i = 0; i < model.size(); i++)
         {
             if(!bPoints)
                 break;
@@ -244,24 +264,11 @@ public:
             if(nSelected == i)
                 cPoint = olc::GREEN;
 
-            FillCircle(transformed[i], radius, cPoint);
-            DrawStringDecal(transformed[i]+olc::vf2d{1,1}, std::to_string(i), olc::BLACK, olc::vf2d(radius, radius) * 0.3f);
-            DrawStringDecal(transformed[i], std::to_string(i), olc::WHITE, olc::vf2d(radius, radius) * 0.3f);
+            FillCircle(model[i], radius, cPoint);
+            DrawStringDecal(model[i]+olc::vf2d{1,1}, std::to_string(i), olc::BLACK, olc::vf2d(radius, radius) * 0.3f);
+            DrawStringDecal(model[i], std::to_string(i), olc::WHITE, olc::vf2d(radius, radius) * 0.3f);
         }
-
-        DrawString(olc::vi2d{5, 5} * STRING_SCALE, buf.str(), olc::WHITE, STRING_SCALE);
-        DrawInstructions();
-
-        return !GetKey(olc::ESCAPE).bPressed;
     }
-
-
-private:
-
-	olc::vf2d ScreenToWorld(const olc::vf2d& p)
-	{
-		return olc::vf2d(p - vOffset) / fScale;
-	}
 
     void DrawInstructions()
     {
@@ -323,6 +330,9 @@ private:
 
 private:
     
+    // mouse cursor
+    olc::vf2d vCursor;
+
     // scaling
     float fScale;
     float fMinScale;
