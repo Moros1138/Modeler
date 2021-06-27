@@ -74,7 +74,7 @@ public:
         bWire =     true;
 
         // point selection
-        selected = -1;
+        nSelected = -1;
         
         return true;
     }
@@ -84,7 +84,7 @@ public:
         
         std::stringstream buf;
         vMouse = GetMousePos();
-        hover = -1;
+        nHover = -1;
 
         // BEGIN: pan
         if(GetMouse(2).bPressed)
@@ -119,12 +119,12 @@ public:
         buf << vCursor.x * 0.1f << " " << vCursor.y * 0.1f;
         
         // find if we're hovering over a point
-        hover = -1;
+        nHover = -1;
         for(int i = 0; i < mModel.size(); i++)
         {
             if((vZoomStart - mModel[i]).mag() < 0.5f)
             {
-                hover = i;
+                nHover = i;
                 break;
             }
         }
@@ -132,31 +132,31 @@ public:
         // add or select point (Left Mouse)
         if(GetMouse(0).bPressed)
         {
-            selected = -1;
+            nSelected = -1;
             
             // are we hovering over one?
-            if(hover != -1)
-                selected = hover;
+            if(nHover != -1)
+                nSelected = nHover;
 
             // if we're here and not selected, add the point
-            if(selected == -1)
+            if(nSelected == -1)
                 mModel.push_back(vCursor + vOrigin);
         }
         
         // move the selected point around while held
-        if(GetMouse(0).bHeld && selected != -1)
-            mModel[selected] = vCursor + vOrigin;
+        if(GetMouse(0).bHeld && nSelected != -1)
+            mModel[nSelected] = vCursor + vOrigin;
 
         // deselect point when released
-        if(GetMouse(0).bReleased && selected != -1)
-            selected = -1;
+        if(GetMouse(0).bReleased && nSelected != -1)
+            nSelected = -1;
 
         // remove point we're hoving over
-        if(GetKey(olc::R).bPressed && hover != -1)
+        if(GetKey(olc::R).bPressed && nHover != -1)
         {
-            mModel.erase(mModel.begin()+hover);
-            selected = -1;
-            hover = -1;
+            mModel.erase(mModel.begin()+nHover);
+            nSelected = -1;
+            nHover = -1;
         }
         
         // save model
@@ -234,17 +234,17 @@ public:
                 break;
 
             // default red
-            olc::Pixel pCol = olc::RED;
+            olc::Pixel cPoint = olc::RED;
             
             // yellow on hover
-            if(hover == i)
-                pCol = olc::YELLOW;
+            if(nHover == i)
+                cPoint = olc::YELLOW;
             
             // green on selected
-            if(selected == i)
-                pCol = olc::GREEN;
+            if(nSelected == i)
+                cPoint = olc::GREEN;
 
-            FillCircle(transformed[i], radius, pCol);
+            FillCircle(transformed[i], radius, cPoint);
             DrawStringDecal(transformed[i]+olc::vf2d{1,1}, std::to_string(i), olc::BLACK, olc::vf2d(radius, radius) * 0.3f);
             DrawStringDecal(transformed[i], std::to_string(i), olc::WHITE, olc::vf2d(radius, radius) * 0.3f);
         }
@@ -355,8 +355,8 @@ private:
     Model mModel;
 
     // track selected point
-    int selected;
-    int hover;
+    int nHover;
+    int nSelected;
 
     // file stream
     std::ofstream outfile;
